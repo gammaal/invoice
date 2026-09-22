@@ -1,68 +1,60 @@
 <?php
 
-// Show errors for debugging
+// Catch everything and display it
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    echo "<pre>ERROR [$errno]: $errstr\nFile: $errfile\nLine: $errline</pre>";
+    exit(1);
+});
+
+set_exception_handler(function($e) {
+    echo "<pre>EXCEPTION: " . $e->getMessage() . "\nFile: " . $e->getFile() . "\nLine: " . $e->getLine() . "\nTrace:\n" . $e->getTraceAsString() . "</pre>";
+    exit(1);
+});
+
+register_shutdown_function(function() {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+        echo "<pre>FATAL: " . $error['message'] . "\nFile: " . $error['file'] . "\nLine: " . $error['line'] . "</pre>";
+    }
+});
+
 ini_set('display_errors', '1');
 ini_set('display_startup_errors', '1');
 error_reporting(E_ALL);
 
-// Vercel's only writable directory is /tmp
-$tmpDir = '/tmp';
-
-// Create all required Laravel directories in /tmp
-$dirs = [
-    $tmpDir . '/storage/framework/views',
-    $tmpDir . '/storage/framework/cache/data',
-    $tmpDir . '/storage/framework/sessions',
-    $tmpDir . '/storage/framework/testing',
-    $tmpDir . '/storage/logs',
-    $tmpDir . '/storage/app/public',
-    $tmpDir . '/database',
-];
-
-foreach ($dirs as $dir) {
-    if (!is_dir($dir)) {
-        mkdir($dir, 0775, true);
-    }
+// Setup /tmp directories
+$tmp = '/tmp';
+foreach ([
+    "$tmp/storage/framework/views",
+    "$tmp/storage/framework/cache/data",
+    "$tmp/storage/framework/sessions",
+    "$tmp/storage/framework/testing",
+    "$tmp/storage/logs",
+    "$tmp/storage/app/public",
+    "$tmp/database",
+] as $dir) {
+    if (!is_dir($dir)) mkdir($dir, 0775, true);
 }
 
-// SQLite database in /tmp
-$dbPath = $tmpDir . '/database/database.sqlite';
-if (!file_exists($dbPath)) {
-    touch($dbPath);
-}
+// SQLite
+$db = "$tmp/database/database.sqlite";
+if (!file_exists($db)) touch($db);
 
-// Override environment variables for Vercel serverless
-$env = [
-    'APP_ENV'             => 'production',
-    'APP_DEBUG'           => 'false',
-    'DB_CONNECTION'       => 'sqlite',
-    'DB_DATABASE'         => $dbPath,
-    'SESSION_DRIVER'      => 'cookie',
-    'CACHE_STORE'         => 'array',
-    'CACHE_DRIVER'        => 'array',
-    'QUEUE_CONNECTION'    => 'sync',
-    'LOG_CHANNEL'         => 'stderr',
-    'FILESYSTEM_DISK'     => 'local',
-    'BROADCAST_CONNECTION'=> 'log',
-    'VIEW_COMPILED_PATH'  => $tmpDir . '/storage/framework/views',
-];
-
-foreach ($env as $key => $value) {
-    putenv("{$key}={$value}");
-    $_ENV[$key]    = $value;
-    $_SERVER[$key] = $value;
-}
-
-// Symlink storage directories so Laravel can write to /tmp
-$laravelRoot = dirname(__DIR__);
-$storageLink = $laravelRoot . '/storage/framework';
-
-// If storage/framework is not writable, override the paths Laravel uses
-if (!is_writable($storageLink)) {
-    // Override storage path via environment so AppServiceProvider can use it
-    putenv('STORAGE_PATH=' . $tmpDir . '/storage');
-    $_ENV['STORAGE_PATH']    = $tmpDir . '/storage';
-    $_SERVER['STORAGE_PATH'] = $tmpDir . '/storage';
+// Env overrides
+foreach ([
+    'APP_ENV'              => 'production',
+    'APP_DEBUG'            => 'true',
+    'DB_CONNECTION'        => 'sqlite',
+    'DB_DATABASE'          => $db,
+    'SESSION_DRIVER'       => 'cookie',
+    'CACHE_STORE'          => 'array',
+    'QUEUE_CONNECTION'     => 'sync',
+    'LOG_CHANNEL'          => 'stderr',
+    'STORAGE_PATH'         => "$tmp/storage",
+    'BROADCAST_CONNECTION' => 'log',
+] as $k => $v) {
+    putenv("$k=$v");
+    $_ENV[$k] = $_SERVER[$k] = $v;
 }
 
 require __DIR__ . '/../public/index.php';
