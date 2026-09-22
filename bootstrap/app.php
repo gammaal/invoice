@@ -5,14 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
-$app = Application::configure(basePath: dirname(__DIR__));
-
-// On Vercel, /tmp is the only writable directory
-if (isset($_ENV['STORAGE_PATH'])) {
-    $app->useStoragePath($_ENV['STORAGE_PATH']);
-}
-
-return $app
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
@@ -26,3 +19,10 @@ return $app
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
     })->create();
+
+// On Vercel, /tmp is the only writable directory
+if (isset($_ENV['STORAGE_PATH'])) {
+    $app->useStoragePath($_ENV['STORAGE_PATH']);
+}
+
+return $app;
